@@ -28,7 +28,7 @@
       textarea.object { width: 100%; height: 22em; font-size: 10px; font-family: monospace; }
       textarea.log { width: 100%; height: 30em; font-size: 10px; font-family: monospace; }
       #publisher-btn { font-size: 12px; padding-left: 1em; font-weight: normal; }
-      .board-size { font-size: 12px; padding-left: 2em; font-weight: normal; }
+      .board-size, #byte-stats { font-size: 12px; padding-left: 2em; font-weight: normal; }
     </style>
   </head>
 
@@ -41,7 +41,7 @@
       <textarea id="publisher-object" class="object">Press start publishing link to start publishign JSON data.
 Note: If two publishers are publishing simultaneously all bets are off - this will fail as the serial numbers will conflict!
       </textarea>
-      <h4>Log</h4>
+      <h4>Log <span id="byte-stats"></span></h4>
       <textarea id="publisher-log" class="log"></textarea>
     </div>
     <div class="panel">
@@ -126,6 +126,8 @@ Note: If two publishers are publishing simultaneously all bets are off - this wi
     }
 
     let patchService = new PatchService(SendFullObject.afterSeconds, SendFullObject.every);
+    let totalBytesSaved = 0, totalBytes = 0;
+    let $byteStats = $('#byte-stats');
     function updateAndPublishScores() {
       randomlyChangeScoreBoard();
       $('#publisher-object').val(JSON.stringify(scoreBoard, null, 2));
@@ -143,6 +145,13 @@ Note: If two publishers are publishing simultaneously all bets are off - this wi
                 savedBytes = objectBytes - payloadBytes,
                 savedPct = Math.round((1 - (payloadBytes / objectBytes)) * 100);
             log('publisher', `Published ${update.object ? 'full object' : 'json patch'}, serial: ${update.serial}, size: ${payloadBytes} bytes${update.object ? '' : `, saved: ${savedBytes} bytes (${savedPct}%)`}`);
+
+            totalBytes += objectBytes;
+            if (update.patch && savedBytes) {
+              totalBytesSaved += savedBytes;
+              let saving = Math.round((totalBytesSaved / totalBytes) * 100);
+              $byteStats.text(`Bandwidth: w/o patch ${fileSizeSI(totalBytes)}, with patch ${fileSizeSI(totalBytes - totalBytesSaved)}, saving ${saving}%`);
+            }
           }
         });
       }
@@ -358,6 +367,11 @@ Note: If two publishers are publishing simultaneously all bets are off - this wi
     function arrayShuffle(o) {
       for(var j, x, i = o.length; i; j = parseInt(Math.random() * i), x = o[--i], o[i] = o[j], o[j] = x);
       return o;
+    }
+
+    function fileSizeSI(size) {
+      var e = (Math.log(size) / Math.log(1e3)) | 0;
+      return +(size / Math.pow(1e3, e)).toFixed(2) + ' ' + ('kMGTPEZY'[e - 1] || '') + 'B';
     }
 
     /* ---- UI CODE ---- */
