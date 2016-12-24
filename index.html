@@ -282,7 +282,7 @@ Note: If two publishers are publishing simultaneously all bets are off - this wi
       Function to fabricate fake score board JSON data in scoreBoard object.
       In a realistic implementation you would have an external source generating this data.
     */
-    function randomlyChangeScoreBoard(createMinPlayers) {
+    function randomlyChangeScoreBoard(forcePlayers) {
       let addPlayer = () => {
         let availableNames = Names.filter((name) => { return !(name in scoreBoard); });
         let name = availableNames[Math.floor(Math.random() * availableNames.length)];
@@ -292,9 +292,12 @@ Note: If two publishers are publishing simultaneously all bets are off - this wi
         };
       }
 
-      if (createMinPlayers) {
-        for (var i = Object.keys(scoreBoard).length; i < createMinPlayers; i++) {
+      if (forcePlayers) {
+        for (var i = Object.keys(scoreBoard).length; i < forcePlayers; i++) {
           addPlayer();
+        }
+        while (Object.keys(scoreBoard).length > forcePlayers) {
+          delete scoreBoard[Object.keys(scoreBoard)[0]];
         }
       } else {
         /* Add a new person into the scoreboard if space 20% of the time */
@@ -308,12 +311,16 @@ Note: If two publishers are publishing simultaneously all bets are off - this wi
         let names = Object.keys(scoreBoard);
         delete scoreBoard[names[Math.floor(Math.random() * names.length)]];
       }
-      /* Modify scores by up to 1/-1 for each user 25% of the time */
+      /* Modify scores by up to 1/-1 for each user's score 25% of the time */
       for (let name in scoreBoard) {
-        if (scoreBoard.hasOwnProperty(name) && (Math.random() < 0.25)) {
+        if (scoreBoard.hasOwnProperty(name)) {
           let existing = scoreBoard[name];
-          existing.wins = Math.round(existing.wins + (Math.random()*2) - 1);
-          existing.losses = Math.round(existing.losses + (Math.random()*2) - 1);
+          if (Math.random() < 0.25) {
+            existing.wins = Math.round(existing.wins + (Math.random() > 0 ? 1 : -1));
+          }
+          if (Math.random() < 0.25) {
+            existing.losses = Math.round(existing.losses + (Math.random() > 0 ? 1 : -1));
+          }
         }
       }
     }
@@ -356,7 +363,7 @@ Note: If two publishers are publishing simultaneously all bets are off - this wi
     /* Listen for changes in max object size drop down and adjust scoreboard size accordingly */
     $(() => {
       let $boardSize = $("#board-size");
-      for (var i = 3; i <= Names.length; i++) {
+      for (var i = 2; i <= Names.length; i++) {
         $boardSize.append(`<option value="${i}" ${i === Defaults.boardLength ? 'selected' : ''}>${i}</option>`);
       }
       $boardSize.on('change', () => {
