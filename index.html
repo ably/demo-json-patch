@@ -95,20 +95,28 @@ Note: If two publishers are publishing simultaneously all bets are off - this wi
 
         /* If last full object serials equals resendEvery or more than resendAfterTime has passed,
            then resend the entire object */
-        if (force ||
-            (this.serial - this.lastObjectSent.serial == this.resendEvery) ||
-            (this.lastObjectSent.time < new Date().getTime() - this.resendAfterTime)) {
-          this.lastObjectSent = { serial: this.serial, time: new Date().getTime() };
-          payload.object = newObject;
-        } else {
+        if (!force &&
+            (this.serial - this.lastObjectSent.serial != this.resendEvery) &&
+            (this.lastObjectSent.time > new Date().getTime() - this.resendAfterTime)) {
           let patch = jsonpatch.compare(oldObject, newObject)
           if (patch.length === 0) {
             /* nothing changed */
             return null;
           }
           payload.patch = patch;
+          payload.root = this.lastObjectSent.serial;
         }
-        payload.completeSerial = this.lastObjectSent.serial;
+
+        let newObjectSize = JSON.stringify(newObject).length,
+            patchSize = (JSON.stringify(payload.patch) + payload.root).length;
+
+        /* Send full object if patch is larger than the actual object for bandwith efficiency */
+        if (!payload.patch || (patchSize >= newObjectSize)) {
+          this.lastObjectSent = { serial: this.serial, time: new Date().getTime() };
+          payload.object = newObject;
+          delete payload.patch;
+          delete payload.root;
+        }
 
         this.jsonObject = $.extend(true, {}, newObject); /* note using jQuery clone to ensure mutations on the object subsequently do not affect the diff */
         this.lastUpdatedAt = new Date().getTime();
@@ -121,16 +129,20 @@ Note: If two publishers are publishing simultaneously all bets are off - this wi
     function updateAndPublishScores() {
       randomlyChangeScoreBoard();
       $('#publisher-object').val(JSON.stringify(scoreBoard, null, 2));
-      let patch = patchService.update(scoreBoard);
-      if (patch === null) {
+      let update = patchService.update(scoreBoard);
+      if (update === null) {
         log('publisher', 'Skipping patch as no change');
       } else {
-        publisherChannel.publish(publisherSession, patch, function(err) {
+        publisherChannel.publish(publisherSession, update, function(err) {
           if (err) {
             log('publisher', `Failed to publish, will force resend the entire object. Err: ${JSON.stringify(err)}`);
             patchService.update(scoreBoard, true);
           } else {
-            log('publisher', `Published ${patch.object ? 'full object' : 'json patch'}, serial: ${patch.serial}, size: ${JSON.stringify(patch).length} bytes, object size: ${JSON.stringify(scoreBoard).length} bytes`);
+            let payloadBytes = JSON.stringify(update.patch || update.object).length,
+                objectBytes = JSON.stringify(scoreBoard).length,
+                savedBytes = objectBytes - payloadBytes,
+                savedPct = Math.round((1 - (payloadBytes / objectBytes)) * 100);
+            log('publisher', `Published ${update.object ? 'full object' : 'json patch'}, serial: ${update.serial}, size: ${payloadBytes} bytes${update.object ? '' : `, saved: ${savedBytes} bytes (${savedPct}%)`}`);
           }
         });
       }
@@ -247,7 +259,7 @@ Note: If two publishers are publishing simultaneously all bets are off - this wi
           } else {
             /* Determine how far back we need to go in the history to obtain the complete object and all
                subsequent updates that need to be applie up until the point this channel has become attached */
-            let updatesToRetrieve = recentUpdate.serial - recentUpdate.completeSerial + 1;
+            let updatesToRetrieve = recentUpdate.serial - recentUpdate.root + 1;
             log('client', `Retrieving backlog from history of ${updatesToRetrieve} updates`);
             subscriberChannel.history({ untilAttach: true, limit: updatesToRetrieve }, function(err, resultPage) {
               if (err) {
