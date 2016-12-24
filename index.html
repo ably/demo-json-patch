@@ -189,7 +189,7 @@ Note: If two publishers are publishing simultaneously all bets are off - this wi
         }
         log('publisher', `Attached to channel ${channel}`);
       });
-      publisherChannel.subscribe(function(msg) {
+      publisherChannel.subscribe((msg) =>  {
         if (isPublishing()) {
           if (msg.name != publisherSession) {
             alert ("Error! Another publisher is publishing events to this channel. This will not work as the serial numbers will not be consistent and patches cannot be applied. Stopping this client from publishing now");
@@ -201,12 +201,14 @@ Note: If two publishers are publishing simultaneously all bets are off - this wi
 
     /* ---- SUBSCRIBER LOGIC ------ */
 
-    subscriber.connection.once('connected', function() {
+    subscriber.connection.once('connected', () => {
+      log('client', 'connected to Ably');
+
       let patchBacklog = [], readyForPatches = false;
       let jsonObject = {}
 
       /* Apply JSON patch or complete JSON object update received from the Ably channel */
-      function applyUpdate(update) {
+      let applyUpdate = (update) => {
         if (update.object) {
           log('client', `Replaced object with serial ${update.serial}`);
           jsonObject = update.object;
@@ -222,34 +224,20 @@ Note: If two publishers are publishing simultaneously all bets are off - this wi
         $('#client-object').val(JSON.stringify(jsonObject, null, 2));
       }
 
-      function processBacklog() {
+      let processBacklog = () => {
         patchBacklog.reverse().forEach((update) => {
           applyUpdate(update);
         });
         readyForPatches = true
       }
 
-      log('client', 'connected to Ably');
-
-      /* Listen for updates over the Ably channel in real time */
-      subscriberChannel.subscribe(function(msg) {
-        if (!readyForPatches) {
-          /* If patches from history have not yet been applied then put the
-             updates into a backlog to be applied once the history updates have been
-             applied and the JSON object has been constructed */
-          patchBacklog.push(msg.data);
-        } else {
-          applyUpdate(msg.data);
-        }
-      });
-
-      subscriberChannel.attach(function(err) {
-        if (err) {
-          log('client', `Fatal error, could not attach to channel ${JSON.stringify(err)}`);
-          return;
-        }
-        log('client', `Attached to channel ${channel}`);
-        subscriberChannel.history({ untilAttach: true, limit: 1 }, function(err, resultPage) {
+      /* Constructs the JSON object from history by finding the complete object,
+         applying the patches published subsequently in history, and then applies
+         any patches received on the channel during this construction phase */
+      let constructObjectFromHistory = () => {
+        patchBacklog.splice(0);
+        readyForPatches = false;
+        subscriberChannel.history({ untilAttach: true, limit: 1 }, (err, resultPage) => {
           if (err) {
             log('client', `Fatal error, could not get first update in history ${JSON.stringify(err)}`);
             return;
@@ -270,18 +258,44 @@ Note: If two publishers are publishing simultaneously all bets are off - this wi
                subsequent updates that need to be applie up until the point this channel has become attached */
             let updatesToRetrieve = recentUpdate.serial - recentUpdate.root + 1;
             log('client', `Retrieving backlog from history of ${updatesToRetrieve} updates`);
-            subscriberChannel.history({ untilAttach: true, limit: updatesToRetrieve }, function(err, resultPage) {
+            subscriberChannel.history({ untilAttach: true, limit: updatesToRetrieve }, (err, resultPage) => {
               if (err) {
                 log('client', `Fatal error, could not get ${updatesToRetrieve} updates from history ${JSON.stringify(err)}`);
                 return;
               }
-              resultPage.items.reverse().forEach(function(msg) {
+              resultPage.items.reverse().forEach((msg) => {
                 applyUpdate(msg.data);
                 processBacklog();
               });
             });
           }
         });
+      }
+
+      /* Listen for updates over the Ably channel in real time */
+      subscriberChannel.subscribe((msg) => {
+        if (!readyForPatches) {
+          /* If patches from history have not yet been applied then put the
+             updates into a backlog to be applied once the history updates have been
+             applied and the JSON object has been constructed */
+          patchBacklog.push(msg.data);
+        } else {
+          applyUpdate(msg.data);
+        }
+      });
+
+      subscriberChannel.attach();
+      subscriberChannel.on('failed', (stateChange) => log('client', `Fatal error, could not attach to channel ${JSON.stringify(stateChange.reason)}`));
+      subscriberChannel.on('suspended', (stateChange) => log('client', `Update channel suspended, no updates will be received. Is there a valid Internet connection?`));
+      subscriberChannel.on('attached', (stateChange) => {
+        log('client', `Channel attached, constructing object from history`);
+        constructObjectFromHistory();
+      });
+      subscriberChannel.on('update', (stateChange) => {
+        if (!stateChange.resumed) {
+          log('client', `Continuity on update channel lost, reconstructing object from history`);
+          constructObjectFromHistory();
+        }
       });
     });
 
