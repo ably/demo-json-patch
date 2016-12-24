@@ -1,0 +1,13 @@
+{
+  "name": "Ably JSON Patch demo",
+  "description": "A simple demo to demonstrate using Ably pub/sub and history to build a JSON Patch service",
+  "repository": "https://github.com/ably/json-patch-demo",
+  "logo": "https://files.ably.io/logo-70x70.png",
+  "keywords": ["Ably", "pub/sub", "JSON patch", "realtime"],
+  "success_url": "/heroku-start",
+  "addons": [
+    {
+      "plan": "ably:test"
+    }
+  ]
+}

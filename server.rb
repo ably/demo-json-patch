@@ -9,7 +9,15 @@ server.mount_proc '/' do |req, res|
   else
     res.body = File.read(File.join(File.dirname(__FILE__), 'index.html')).
       gsub('[INSERT_API_KEY_HERE]', ENV['ABLY_API_KEY'])
+
+    if ENV['DYNO']
+      res.body.gsub!('</body>', '<p class="notice">Have you remembed to set up the "json-patch" namespace in your app? <a href="/heroku-start">Find out how.</a></body>')
+    end
   end
+end
+
+server.mount_proc '/heroku-start' do |req, res|
+  res.body = File.read(File.join(File.dirname(__FILE__), 'heroku-start.html'))
 end
 
 server.start

@@ -32,10 +32,14 @@
       textarea.log { width: 100%; height: 30em; font-size: 10px; font-family: monospace; }
       #publisher-btn { font-size: 12px; padding-left: 1em; font-weight: normal; }
       .board-size, #byte-stats { font-size: 12px; padding-left: 2em; font-weight: normal; }
+      .notice { text-align: center; color: red; padding-top: 2em; clear: both; }
+      .intro { text-align: center; font-size: 12px; margin-bottom: 5px; padding-bottom: 5px; border-bottom: 1px solid #CCC; }
+      .ably-logo { float: right; width: 35px; height: 35px; margin-top: 5px;}
     </style>
   </head>
 
   <body>
+    <p class="intro">You are viewing the Ably JSON Patch demo. Not sure what this is, <a href="https://github.com/ably/json-patch-demo">find out more</a></p>
     <div class="panel">
       <h3>REST Publisher Object
         <a href="#" id="publisher-btn">Start publishing</a>
@@ -48,6 +52,7 @@ Note: If two publishers are publishing simultaneously all bets are off - this wi
       <textarea id="publisher-log" class="log"></textarea>
     </div>
     <div class="panel">
+      <a href="https://www.ably.io"><img src="https://files.ably.io/logo-70x70.png" alt="Ably logo" class="ably-logo"></a>
       <h3>Client Object</h3>
       <textarea id="client-object" class="object"></textarea>
       <h4>Log</h4>

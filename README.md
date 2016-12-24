@@ -8,6 +8,10 @@ However, when the scoreboard objects become larger than a kilobyte or two, it be
 
 We built this demo to show how easy it is to use Ably's [pub/sub API](https://www.ably.io/documentation/realtime/channels-messages) along with our [history API](https://www.ably.io/documentation/realtime/history), to build a service that publishes only the changes (deltas) instead of the entire object for each update.
 
+Want to try this demo now? Deploy to Heroku for free:
+
+[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy)
+
 ## How this works
 
 ### Publisher
@@ -34,6 +38,16 @@ The subscribe works as follows:
 * Error conditions in this demo are caught and logged, but there is little attempt to retry or recover from failure. If you use this code in production you should consider recovery strategies.
 
 # Running this demo
+
+## On Heroku (the easiest)
+
+By far the easiest way to view the demo is just to click the Heroku button below and follow the instructions.
+
+[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy)
+
+## Locally
+
+If you want to try this out locally, follow these instructions:
 
 1. Go to https://www.ably.io/ and sign up for a free API key
 2. Enable history in your app you set up. Go to app, settings and configure the namespace "json-patch" to persist messages. See https://goo.gl/LFbwXj for more info on how history works and how to set it up. History is needed so that new clients can obtain the latest object and apply recent patches

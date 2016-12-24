@@ -1,0 +1,37 @@
+<html>
+  <head>
+    <style type="text/css">
+      body { font-family: Arial, Helvetica, sans; }
+    </style>
+  </head>
+  <body>
+    <img src="https://files.ably.io/logo-70x70.png" alt="Ably logo" style="float: right">
+    <h1>Ably JSON Patch Demo</h1>
+
+    <p>
+      Great, looks like you've got the demo installed on Heroku.
+    </p>
+    <p>
+      However, this JSON patch demo requires the use of <a href="https://www.ably.io/documentation/realtime/history">Ably's history API</a>, which by default, is not enabled. You need to enable this from your Ably dashboard, which you can access in one of two ways. To access your dashboard:
+    </p>
+    <ul>
+      <li>
+        Run this Heroku command for this app demo (you will have seen this when installing the demo from the Heroku button) <pre>heroku addons:open ably --app [app-id-for-this-demo]</pre>
+      </li>
+      <li>
+        Visit your Heroku dashboard, find this app, view the addons and click on the Ably addon for this app.
+      </li>
+    </ul>
+
+    <p>
+      Once you have access to your Ably dashboard, go to Settings, then within the "Channel Rules" tab, click "Add new rule". Once the new channel rule modal has appeared, enter "json-patch" into the Namespace field and ensure the "Persisted" checkbox is enabled.  Then click "Create channel rule" and now all channels within that namespace will be persisted. If you would like to know about channel namespaces, read <a href="https://support.ably.io/solution/articles/3000030058-what-is-a-channel-namespace-and-how-can-i-use-them-">this article</a>.
+    </p>
+
+    <h3>Next steps</h3>
+    <p>
+      Now that history is configured for your app, you're ready to run the JSON Patch demo.<br>
+      <a href="/">View the demo now</a>
+    </p>
+  </body>
+</html>
+
