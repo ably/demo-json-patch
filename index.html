@@ -202,7 +202,7 @@ Note: If two publishers are publishing simultaneously all bets are off - this wi
           log('client', `Replaced object with serial ${update.serial}`);
           jsonObject = update.object;
         } else {
-          log('client', `Applied patch with serial ${update.serial}`);
+          log('client', `Applied patch with serial ${update.serial}, ${update.patch.length} operation(s)`);
           try {
             jsonpatch.apply(jsonObject, update.patch);
           } catch (e) {
@@ -311,8 +311,14 @@ Note: If two publishers are publishing simultaneously all bets are off - this wi
         let names = Object.keys(scoreBoard);
         delete scoreBoard[names[Math.floor(Math.random() * names.length)]];
       }
-      /* Modify scores by up to 1/-1 for each user's score 25% of the time */
-      for (let name in scoreBoard) {
+      /*
+        Modify scores by up to 1/-1 for each user's score 25% of the time
+        Vary quantity of changes for each update though to simulate large
+        and simulate updates
+      */
+      let names = arrayShuffle(Object.keys(scoreBoard));
+      names = names.slice(0, Math.ceil(names.length * Math.random()));
+      names.forEach((name) => {
         if (scoreBoard.hasOwnProperty(name)) {
           let existing = scoreBoard[name];
           if (Math.random() < 0.25) {
@@ -322,7 +328,7 @@ Note: If two publishers are publishing simultaneously all bets are off - this wi
             existing.losses = Math.round(existing.losses + (Math.random() > 0 ? 1 : -1));
           }
         }
-      }
+      });
     }
 
     /* --- UTILITY METHODS --- */
@@ -348,6 +354,11 @@ Note: If two publishers are publishing simultaneously all bets are off - this wi
     function paddingLeft(str, paddingValue) {
       return String(paddingValue + str).slice(-paddingValue.length);
     };
+
+    function arrayShuffle(o) {
+      for(var j, x, i = o.length; i; j = parseInt(Math.random() * i), x = o[--i], o[i] = o[j], o[j] = x);
+      return o;
+    }
 
     /* ---- UI CODE ---- */
 
