@@ -1,0 +1,357 @@
+<html>
+  <head>
+    <script type="text/javascript">
+      /*
+        ---- INSTRUCTIONS TO GET THIS DEMO WORKING ----
+
+        1. Go to https://www.ably.io/ and sign up for a free API key.
+        2. Then enable history for the namespace "json-patch", see https://goo.gl/LFbwXj
+        3. Insert your API key below where it says "[INSERT_API_KEY_HERE]"
+        4. Open this in your browser, and click "Start publish"
+        5. Open this page in other tabs to see them all keep in sync in real time
+      */
+      const ApiKey = "[INSERT_API_KEY_HERE]";
+
+      if (ApiKey.indexOf('INSERT') >= 0) {
+        alert("Oops, looks like you've not set up your API key and enabled history either.\n\nFollow the simple instructions at https://github.com/ably/json-patch-demo to get this demo working.\n\nTaking you there now.");
+        document.location.href = 'https://github.com/ably/json-patch-demo';
+      }
+    </script>
+
+    <script src="https://files.ably.io/javascript/json-patch-duplex.min.js"></script>
+    <script src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
+    <script src="https://cdn.ably.io/lib/ably.min-0.9.js"></script>
+
+    <style>
+      body { font-family: Arial, Helvetica, sans; }
+      .panel { width: 50%; float: left; padding: 0 5px; box-sizing: border-box; }
+      textarea.object { width: 100%; height: 22em; font-size: 10px; font-family: monospace; }
+      textarea.log { width: 100%; height: 30em; font-size: 10px; font-family: monospace; }
+      #publisher-btn { font-size: 12px; padding-left: 1em; font-weight: normal; }
+      .board-size { font-size: 12px; padding-left: 2em; font-weight: normal; }
+    </style>
+  </head>
+
+  <body>
+    <div class="panel">
+      <h3>REST Publisher Object
+        <a href="#" id="publisher-btn">Start publishing</a>
+        <span class="board-size">Max objects: <select id="board-size"></select></span>
+      </h3>
+      <textarea id="publisher-object" class="object">Press start publishing link to start publishign JSON data.
+Note: If two publishers are publishing simultaneously all bets are off - this will fail as the serial numbers will conflict!
+      </textarea>
+      <h4>Log</h4>
+      <textarea id="publisher-log" class="log"></textarea>
+    </div>
+    <div class="panel">
+      <h3>Client Object</h3>
+      <textarea id="client-object" class="object"></textarea>
+      <h4>Log</h4>
+      <textarea id="client-log" class="log"></textarea>
+    </div>
+  </body>
+
+  <script type="text/javascript">
+    const Names = 'James John Robert Michael William David Richard Charles Joseph Mary Patricia Linda Barbara Elizabeth Jennifer Maria Susan Margaret Mark Donald George Kenneth Steven Edward Lisa Nancy Karen Betty Jelen Sandra Donna Carol Ruth Sharon'.split(' ');
+    const Defaults = { score: 50, boardLength: 8 }
+
+    /* Scoreboard is an example JSON object used to demonstrate use of JSON patch */
+    const scoreBoard = {}
+    randomlyChangeScoreBoard(Defaults.boardLength);
+
+     /* Channel name in the "json-patch" namespace which must be configured with history enabled, see https://goo.gl/LFbwXj */
+    const channel = `json-patch:demo`;
+    const publisher = new Ably.Realtime({ key: ApiKey });
+    const subscriber = new Ably.Realtime({ key: ApiKey });
+    const publisherChannel = publisher.channels.get(channel);
+    const publisherSession = String(Math.random()); /* Used to detect multiple concurrent publishers */
+    const subscriberChannel = subscriber.channels.get(channel);
+
+    /* configuration for PatchService
+       If 60 seconds has elapsed, resend the full object
+       Every 100 JsonPatches, send the full object again.
+       Feel free to tweak this for your own use case */
+    const SendFullObject = { afterSeconds: 60, every: 100 };
+
+    /* ------ PUBLISHER LOGIC -------- */
+
+    /*
+      PatchService is responsible for generating JSON patch objects with meta data
+      that is then simply published over Ably
+    */
+    class PatchService {
+      constructor(resendAfterSeconds, resendEvery) {
+        this.serial = 0;
+        this.resendAfterTime = resendAfterSeconds * 1000;
+        this.resendEvery = resendEvery;
+        this.jsonObject = {};
+        this.lastObjectSent = { serial: -this.resendEvery, time: new Date().getTime() }; /* Force full object resend on first send */
+      }
+
+      update(newObject, force) {
+        let oldObject = this.jsonObject;
+        let payload = { serial: this.serial };
+
+        /* If last full object serials equals resendEvery or more than resendAfterTime has passed,
+           then resend the entire object */
+        if (force ||
+            (this.serial - this.lastObjectSent.serial == this.resendEvery) ||
+            (this.lastObjectSent.time < new Date().getTime() - this.resendAfterTime)) {
+          this.lastObjectSent = { serial: this.serial, time: new Date().getTime() };
+          payload.object = newObject;
+        } else {
+          let patch = jsonpatch.compare(oldObject, newObject)
+          if (patch.length === 0) {
+            /* nothing changed */
+            return null;
+          }
+          payload.patch = patch;
+        }
+        payload.completeSerial = this.lastObjectSent.serial;
+
+        this.jsonObject = $.extend(true, {}, newObject); /* note using jQuery clone to ensure mutations on the object subsequently do not affect the diff */
+        this.lastUpdatedAt = new Date().getTime();
+        this.serial += 1;
+        return payload;
+      }
+    }
+
+    let patchService = new PatchService(SendFullObject.afterSeconds, SendFullObject.every);
+    function updateAndPublishScores() {
+      randomlyChangeScoreBoard();
+      $('#publisher-object').val(JSON.stringify(scoreBoard, null, 2));
+      let patch = patchService.update(scoreBoard);
+      if (patch === null) {
+        log('publisher', 'Skipping patch as no change');
+      } else {
+        publisherChannel.publish(publisherSession, patch, function(err) {
+          if (err) {
+            log('publisher', `Failed to publish, will force resend the entire object. Err: ${JSON.stringify(err)}`);
+            patchService.update(scoreBoard, true);
+          } else {
+            log('publisher', `Published ${patch.object ? 'full object' : 'json patch'}, serial: ${patch.serial}, size: ${JSON.stringify(patch).length} bytes, object size: ${JSON.stringify(scoreBoard).length} bytes`);
+          }
+        });
+      }
+    }
+
+    /* Manager start & stop publishign events at an interval */
+    let publishInterval;
+    function stopPublishing() {
+      clearInterval(publishInterval);
+      publishInterval = null;
+      $('#publisher-btn').text('Start publishing');
+      log('publisher', 'Stopped publishing');
+    }
+
+    function startPublishing() {
+      publishInterval = setInterval(() => {
+        updateAndPublishScores();
+      }, 2000);
+      updateAndPublishScores();
+      $('#publisher-btn').text('Stop publishing');
+      log('publisher', 'Started publishing');
+    }
+
+    function isPublishing() {
+      return publishInterval;
+    }
+
+    /* UI logging for publisher connection and attach events */
+    publisher.connection.once('connected', function() {
+      log('publisher', 'connected to Ably');
+      publisherChannel.attach(function(err) {
+        if (err) {
+          log('publisher', `Could not attach to channel ${channel}. Error: ${JSON.stringify(err)}`);
+          return;
+        }
+        log('publisher', `Attached to channel ${channel}`);
+      });
+      publisherChannel.subscribe(function(msg) {
+        if (isPublishing()) {
+          if (msg.name != publisherSession) {
+            alert ("Error! Another publisher is publishing events to this channel. This will not work as the serial numbers will not be consistent and patches cannot be applied. Stopping this client from publishing now");
+            stopPublishing();
+          }
+        }
+      });
+    });
+
+    /* ---- SUBSCRIBER LOGIC ------ */
+
+    subscriber.connection.once('connected', function() {
+      let patchBacklog = [], readyForPatches = false;
+      let jsonObject = {}
+
+      /* Apply JSON patch or complete JSON object update received from the Ably channel */
+      function applyUpdate(update) {
+        if (update.object) {
+          log('client', `Replaced object with serial ${update.serial}`);
+          jsonObject = update.object;
+        } else {
+          log('client', `Applied patch with serial ${update.serial}`);
+          try {
+            jsonpatch.apply(jsonObject, update.patch);
+          } catch (e) {
+            log('client', `Error applying patch, this update cannot be applied. Update: ${JSON.stringify(update)}, error: ${JSON.stringify(e)}`);
+            return;
+          }
+        }
+        $('#client-object').val(JSON.stringify(jsonObject, null, 2));
+      }
+
+      function processBacklog() {
+        patchBacklog.reverse().forEach((update) => {
+          applyUpdate(update);
+        });
+        readyForPatches = true
+      }
+
+      log('client', 'connected to Ably');
+
+      /* Listen for updates over the Ably channel in real time */
+      subscriberChannel.subscribe(function(msg) {
+        if (!readyForPatches) {
+          /* If patches from history have not yet been applied then put the
+             updates into a backlog to be applied once the history updates have been
+             applied and the JSON object has been constructed */
+          patchBacklog.push(msg.data);
+        } else {
+          applyUpdate(msg.data);
+        }
+      });
+
+      subscriberChannel.attach(function(err) {
+        if (err) {
+          log('client', `Fatal error, could not attach to channel ${JSON.stringify(err)}`);
+          return;
+        }
+        log('client', `Attached to channel ${channel}`);
+        subscriberChannel.history({ untilAttach: true, limit: 1 }, function(err, resultPage) {
+          if (err) {
+            log('client', `Fatal error, could not get first update in history ${JSON.stringify(err)}`);
+            return;
+          }
+          if (resultPage.items.length === 0) {
+            log('client', `No history exists, waiting for updates`);
+            processBacklog();
+            return;
+          }
+
+          let recentUpdate = resultPage.items[0].data;
+          if (recentUpdate.object) {
+            applyUpdate(recentUpdate);
+            log('client', `First untilAttach query return complete object with serial ${recentUpdate.serial}`);
+            processBacklog();
+          } else {
+            /* Determine how far back we need to go in the history to obtain the complete object and all
+               subsequent updates that need to be applie up until the point this channel has become attached */
+            let updatesToRetrieve = recentUpdate.serial - recentUpdate.completeSerial + 1;
+            log('client', `Retrieving backlog from history of ${updatesToRetrieve} updates`);
+            subscriberChannel.history({ untilAttach: true, limit: updatesToRetrieve }, function(err, resultPage) {
+              if (err) {
+                log('client', `Fatal error, could not get ${updatesToRetrieve} updates from history ${JSON.stringify(err)}`);
+                return;
+              }
+              resultPage.items.reverse().forEach(function(msg) {
+                applyUpdate(msg.data);
+                processBacklog();
+              });
+            });
+          }
+        });
+      });
+    });
+
+    /* --- FABRICATE SCORE BOARD DATA --- */
+
+    /*
+      Function to fabricate fake score board JSON data in scoreBoard object.
+      In a realistic implementation you would have an external source generating this data.
+    */
+    function randomlyChangeScoreBoard(createMinPlayers) {
+      let addPlayer = () => {
+        let availableNames = Names.filter((name) => { return !(name in scoreBoard); });
+        let name = availableNames[Math.floor(Math.random() * availableNames.length)];
+        scoreBoard[name] = {
+          wins: Math.round(Math.random() * Defaults.score),
+          losses: Math.round(Math.random() * Defaults.score)
+        };
+      }
+
+      if (createMinPlayers) {
+        for (var i = Object.keys(scoreBoard).length; i < createMinPlayers; i++) {
+          addPlayer();
+        }
+      } else {
+        /* Add a new person into the scoreboard if space 20% of the time */
+        if ((Object.keys(scoreBoard).length < Defaults.boardLength) && (Math.random() < 0.20)) {
+          addPlayer();
+        }
+      }
+
+      /* Delete someone from the scoreboard 10% of the time */
+      if ((Object.keys(scoreBoard).length > 2) && (Math.random() < 0.1)) {
+        let names = Object.keys(scoreBoard);
+        delete scoreBoard[names[Math.floor(Math.random() * names.length)]];
+      }
+      /* Modify scores by up to 1/-1 for each user 25% of the time */
+      for (let name in scoreBoard) {
+        if (scoreBoard.hasOwnProperty(name) && (Math.random() < 0.25)) {
+          let existing = scoreBoard[name];
+          existing.wins = Math.round(existing.wins + (Math.random()*2) - 1);
+          existing.losses = Math.round(existing.losses + (Math.random()*2) - 1);
+        }
+      }
+    }
+
+    /* --- UTILITY METHODS --- */
+
+    function log(type, message) {
+      let $textarea = $('#' + type + '-log');
+      let text = getFormattedTime(new Date()) + " - " + message + "\n" + $textarea.val();
+      $textarea.val(text.split("\n").slice(0,100).join("\n"));
+    }
+
+    function getFormattedTime(date) {
+      let hours = date.getHours();
+      let minutes = date.getMinutes();
+      let seconds = date.getSeconds();
+
+      hours = paddingLeft(hours, "00");
+      minutes = paddingLeft(minutes, "00");
+      seconds = paddingLeft(seconds, "00");
+
+      return `${hours}:${minutes}:${seconds}`;
+    };
+
+    function paddingLeft(str, paddingValue) {
+      return String(paddingValue + str).slice(-paddingValue.length);
+    };
+
+    /* ---- UI CODE ---- */
+
+    /* Listen for click events on the start publish / stop publish buttons */
+    $('#publisher-btn').on('click', () => {
+      if (isPublishing()) {
+        stopPublishing();
+      } else {
+        startPublishing();
+      }
+    });
+
+    /* Listen for changes in max object size drop down and adjust scoreboard size accordingly */
+    $(() => {
+      let $boardSize = $("#board-size");
+      for (var i = 3; i <= Names.length; i++) {
+        $boardSize.append(`<option value="${i}" ${i === Defaults.boardLength ? 'selected' : ''}>${i}</option>`);
+      }
+      $boardSize.on('change', () => {
+        Defaults.boardLength = Number($boardSize.val());
+        randomlyChangeScoreBoard(Defaults.boardLength);
+      });
+    });
+
+  </script>
+</html>
