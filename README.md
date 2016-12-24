@@ -60,7 +60,7 @@ If you want to try this out locally, follow these instructions:
 
 Please visit http://support.ably.io/ for access to our knowledgebase and to ask for any assistance.
 
-You can also view the [community reported Github issues](https://github.com/ably/json-patch-demo/issues).
+You can also view the [community reported Github issues](https://github.com/ably/demo-json-patch/issues).
 
 # License
 
