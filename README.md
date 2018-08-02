@@ -1,14 +1,26 @@
 # Ably JSON Patch data service demo
 
-This is a JSON Patch demo for [Ably Realtime, a realtime data delivery platform](https://www.ably.io).
+This is a JSON Patch demo for [Ably Realtime, a realtime Data Streaming Network](https://www.ably.io).
 
-At Ably, many of our customers want to use our platform to push updates to a data object to any number of clients. For example, this could be a score board during a live football match, and customers rely on Ably to provide the limitless scale, reliability and low latency for each update published.
+At Ably, many of our customers use our platform to push updates to a data object to any number of clients. For example, this could be a score board during a live football match, and customers rely on Ably to provide the limitless scale, reliability and low latency for each update published.
 
-However, when the scoreboard objects become larger than a kilobyte or two, it becomes inefficient from a bandwidth perspective to send the entire object each time, and instead it makes more sense to only send the changes.
+However, when the scoreboard objects become larger than a kilobyte or two, it becomes inefficient, from a bandwidth perspective, to send the entire object each time, and instead it makes sense to only send the deltas (changes).
 
 We built this demo to show how easy it is to use Ably's [pub/sub API](https://www.ably.io/documentation/realtime/channels-messages) along with our [history API](https://www.ably.io/documentation/realtime/history), to build a service that publishes only the changes (deltas) instead of the entire object for each update.
 
-Want to try this demo now? Deploy to Heroku for free:
+## Building on this idea with Open SDSP
+
+At Ably, we're sponsoring an open source protocol called the [Streaming Data Sync Protocol (SDSP)](https://github.com/open-sdsp/spec) that allows publishers of realtime data to efficiently synchronize an object with decoupled subscribers. The protocol is designed to be interoperable with any underlying platforms and transports. The protocol is particularly effective when there is a single publisher and one or more decoupled subscribers (pub/sub pattern).
+
+Whilst this demo shows how trivial it is to build a simple JSON patch service yourself, we'd welcome your input and participation in a standard that will benefit the entire development community at https://github.com/open-sdsp/spec.
+
+## Try this demo
+
+### Demo app hosted on Heroku
+
+See http://ably-json-patch-demo.herokuapp.com/
+
+### Deploy to your Heroku account for free
 
 [![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy)
 
@@ -37,7 +49,7 @@ The subscribe works as follows:
 * We have configured this demo to republish the entire message either every 100 updates or every 1 minute, whenever there is an update. This configuration should be changed based on your requirements and frequency of updates. The rationale behind this is that if you don't publish the whole object very frequently, then new clients that connect will have to potentially retrieve a large number of messages to simply build the current object's state. For example, if you configured this demo to only publish the entire object every 1,000 updates, then a client may connect and have to retrieve 1,000 messages (patches) over our history API to construct the current object.
 * Error conditions in this demo are caught and logged, but there is little attempt to retry or recover from failure. If you use this code in production you should consider recovery strategies.
 
-# Running this demo
+# Running this demo 
 
 ## On Heroku (the easiest)
 
@@ -64,4 +76,4 @@ You can also view the [community reported Github issues](https://github.com/ably
 
 # License
 
-Copyright (c) 2016 Ably Real-time Ltd, Licensed under the Apache License, Version 2.0. Refer to [LICENSE](./LICENSE) for the license terms.
+Copyright (c) 2018 Ably Real-time Ltd, Licensed under the Apache License, Version 2.0. Refer to [LICENSE](./LICENSE) for the license terms.
