@@ -20,4 +20,8 @@ server.mount_proc '/heroku-start' do |req, res|
   res.body = File.read(File.join(File.dirname(__FILE__), 'heroku-start.html'))
 end
 
+server.mount_proc '/GitHub-Mark-32px.png' do |req, res|
+  res.body = File.read(File.join(File.dirname(__FILE__), '/GitHub-Mark-32px.png'))
+end
+
 server.start
